@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, render_template
 import psutil
+import os
 
 app = Flask(__name__)
 
@@ -11,7 +12,8 @@ def index():
 def get_stats():
     cpu = psutil.cpu_percent(interval=0.5)
     memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('C:\\')
+    disk_path = 'C:\\' if os.name == 'nt' else '/'
+    disk = psutil.disk_usage(disk_path)
     battery = psutil.sensors_battery()
     
     # Top 5 RAM consuming apps
@@ -36,4 +38,3 @@ def get_stats():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-    
