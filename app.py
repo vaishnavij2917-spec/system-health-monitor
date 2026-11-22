@@ -1,8 +1,20 @@
 from flask import Flask, jsonify, render_template
 import psutil
+import platform
+import time
 import os
 
 app = Flask(__name__)
+
+def get_uptime():
+    boot_time = psutil.boot_time()
+    uptime_seconds = int(time.time() - boot_time)
+    days, rem = divmod(uptime_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    if days > 0:
+        return f"{days}d {hours}h {minutes}m"
+    return f"{hours}h {minutes}m"
 
 @app.route('/')
 def index():
@@ -16,7 +28,6 @@ def get_stats():
     disk = psutil.disk_usage(disk_path)
     battery = psutil.sensors_battery()
     
-    # Top 5 RAM consuming apps
     processes = []
     for proc in psutil.process_iter(['pid', 'name', 'memory_percent']):
         try:
@@ -31,8 +42,12 @@ def get_stats():
         'ram_used': round(memory.used / (1024**3), 2),
         'ram_total': round(memory.total / (1024**3), 2),
         'disk_percent': disk.percent,
+        'disk_used': round(disk.used / (1024**3), 1),
+        'disk_total': round(disk.total / (1024**3), 1),
         'battery': battery.percent if battery else "N/A",
         'plugged': battery.power_plugged if battery else False,
+        'uptime': get_uptime(),
+        'os_info': f"{platform.system()} ({platform.machine()})",
         'top_processes': top_processes
     })
 
