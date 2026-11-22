@@ -31,7 +31,7 @@
             <small id="ram-detail" style="color:#94a3b8;"></small>
         </div>
         <div class="card">
-            <h3>Disk (C:) Usage</h3>
+            <h3>Disk Usage</h3>
             <div class="value" id="disk">--%</div>
         </div>
         <div class="card">
@@ -81,7 +81,7 @@
 
             document.getElementById('disk').textContent = data.disk_percent + '%';
             document.getElementById('battery').textContent = data.battery !== "N/A" 
-                ? `${data.battery}% ${data.plugged ? '⚡' : ''}` : 'Desktop';
+                ? `${data.battery}% ${data.plugged ? '⚡' : ''}` : 'Cloud Server';
 
             // Update Chart
             const now = new Date().toLocaleTimeString();
@@ -98,7 +98,7 @@
             // Update Processes
             const tbody = document.getElementById('process-table');
             tbody.innerHTML = data.top_processes.map(p => 
-                `<tr><td>${p.pid}</td><td>${p.name}</td><td>${p.memory_percent.toFixed(1)}%</td></tr>`
+                `<tr><td>${p.pid}</td><td>${p.name}</td><td>${(p.memory_percent || 0).toFixed(1)}%</td></tr>`
             ).join('');
         }
 
