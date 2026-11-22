@@ -29,5 +29,5 @@ A real-time server and system resource monitoring web dashboard built with **Pyt
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/vaishnavij2917-spec/system-health-monitor.git](https://github.com/vaishnavij2917-spec/system-health-monitor.git)
+  git clone https://github.com/vaishnavij2917-spec/system-health-monitor.git
    cd system-health-monitor
