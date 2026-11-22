@@ -2,41 +2,68 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>System Health Monitor</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-        h1 { text-align: center; color: #38bdf8; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; max-width: 1000px; margin: 20px auto; }
-        .card { background: #1e293b; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .card h3 { margin: 0 0 10px; font-size: 14px; color: #94a3b8; text-transform: uppercase; }
-        .value { font-size: 28px; font-weight: bold; color: #22c55e; }
+        .header { max-width: 1000px; margin: 0 auto 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+        h1 { margin: 0; color: #38bdf8; font-size: 26px; }
+        .controls { display: flex; align-items: center; gap: 12px; }
+        .badge { background: #1e293b; border: 1px solid #334155; padding: 6px 12px; border-radius: 20px; font-size: 13px; color: #94a3b8; }
+        button { background: #38bdf8; color: #0f172a; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        button.paused { background: #f59e0b; }
+        #alert-banner { display: none; max-width: 1000px; margin: 0 auto 16px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 12px 16px; border-radius: 10px; font-weight: 500; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; max-width: 1000px; margin: 0 auto 20px; }
+        .card { background: #1e293b; padding: 18px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card h3 { margin: 0 0 8px; font-size: 13px; color: #94a3b8; text-transform: uppercase; }
+        .value { font-size: 26px; font-weight: bold; color: #22c55e; }
+        .sub { font-size: 12px; color: #94a3b8; margin-top: 4px; display: block; }
         .alert { color: #ef4444 !important; }
         .chart-box { max-width: 1000px; margin: 20px auto; background: #1e293b; padding: 20px; border-radius: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #334155; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #334155; font-size: 14px; }
+        th { color: #94a3b8; }
+        .bar-bg { background: #0f172a; height: 8px; border-radius: 4px; width: 120px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+        .bar-fill { background: #38bdf8; height: 100%; }
     </style>
 </head>
 <body>
-    <h1>⚡ Live System Health Monitor</h1>
+    <div class="header">
+        <h1>⚡ Live System Health Monitor</h1>
+        <div class="controls">
+            <span class="badge" id="os-badge">Loading OS...</span>
+            <button id="toggle-btn" onclick="toggleMonitoring()">⏸ Pause</button>
+        </div>
+    </div>
+
+    <div id="alert-banner">⚠️ High Resource Usage Detected! Check top processes below.</div>
 
     <div class="grid">
         <div class="card">
             <h3>CPU Usage</h3>
             <div class="value" id="cpu">--%</div>
+            <span class="sub" id="last-updated">Updating...</span>
         </div>
         <div class="card">
             <h3>RAM Usage</h3>
             <div class="value" id="ram">--%</div>
-            <small id="ram-detail" style="color:#94a3b8;"></small>
+            <span class="sub" id="ram-detail">-- / -- GB</span>
         </div>
         <div class="card">
             <h3>Disk Usage</h3>
             <div class="value" id="disk">--%</div>
+            <span class="sub" id="disk-detail">-- / -- GB</span>
         </div>
         <div class="card">
-            <h3>Battery</h3>
-            <div class="value" id="battery">--%</div>
+            <h3>Power / Battery</h3>
+            <div class="value" id="battery">--</div>
+            <span class="sub">Host Environment</span>
+        </div>
+        <div class="card">
+            <h3>System Uptime</h3>
+            <div class="value" id="uptime" style="color:#38bdf8;">--</div>
+            <span class="sub">Continuous Runtime</span>
         </div>
     </div>
 
@@ -45,28 +72,37 @@
     </div>
 
     <div class="chart-box">
-        <h3>Top 5 Memory Consuming Processes</h3>
+        <h3 style="margin-top:0; color:#94a3b8; font-size:14px; text-transform:uppercase;">Top 5 Memory Consuming Processes</h3>
         <table>
-            <thead><tr><th>PID</th><th>App Name</th><th>RAM %</th></tr></thead>
+            <thead><tr><th>PID</th><th>Process Name</th><th>RAM Usage</th></tr></thead>
             <tbody id="process-table"></tbody>
         </table>
     </div>
 
     <script>
+        let isRunning = true;
         const ctx = document.getElementById('liveChart').getContext('2d');
         const chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: [],
                 datasets: [
-                    { label: 'CPU %', data: [], borderColor: '#38bdf8', tension: 0.3 },
-                    { label: 'RAM %', data: [], borderColor: '#a855f7', tension: 0.3 }
+                    { label: 'CPU %', data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)', fill: true, tension: 0.3 },
+                    { label: 'RAM %', data: [], borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.1)', fill: true, tension: 0.3 }
                 ]
             },
             options: { scales: { y: { min: 0, max: 100 } } }
         });
 
+        function toggleMonitoring() {
+            isRunning = !isRunning;
+            const btn = document.getElementById('toggle-btn');
+            btn.textContent = isRunning ? '⏸ Pause' : '▶ Resume';
+            btn.className = isRunning ? '' : 'paused';
+        }
+
         async function updateStats() {
+            if (!isRunning) return;
             const res = await fetch('/api/stats');
             const data = await res.json();
 
@@ -80,10 +116,18 @@
             document.getElementById('ram-detail').textContent = `${data.ram_used} GB / ${data.ram_total} GB`;
 
             document.getElementById('disk').textContent = data.disk_percent + '%';
-            document.getElementById('battery').textContent = data.battery !== "N/A" 
+            document.getElementById('disk-detail').textContent = `${data.disk_used} GB / ${data.disk_total} GB`;
+
+            document.getElementById('battery').textContent = data.battery !== "N/A"
                 ? `${data.battery}% ${data.plugged ? '⚡' : ''}` : 'Cloud Server';
 
-            // Update Chart
+            document.getElementById('uptime').textContent = data.uptime;
+            document.getElementById('os-badge').textContent = data.os_info;
+            document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+            const alertBanner = document.getElementById('alert-banner');
+            alertBanner.style.display = (data.cpu > 85 || data.ram_percent > 85) ? 'block' : 'none';
+
             const now = new Date().toLocaleTimeString();
             if (chart.data.labels.length > 15) {
                 chart.data.labels.shift();
@@ -95,11 +139,18 @@
             chart.data.datasets[1].data.push(data.ram_percent);
             chart.update();
 
-            // Update Processes
             const tbody = document.getElementById('process-table');
-            tbody.innerHTML = data.top_processes.map(p => 
-                `<tr><td>${p.pid}</td><td>${p.name}</td><td>${(p.memory_percent || 0).toFixed(1)}%</td></tr>`
-            ).join('');
+            tbody.innerHTML = data.top_processes.map(p => {
+                const mem = (p.memory_percent || 0).toFixed(1);
+                return `<tr>
+                    <td>${p.pid}</td>
+                    <td>${p.name}</td>
+                    <td>
+                        <div class="bar-bg"><div class="bar-fill" style="width:${Math.min(mem * 5, 100)}%"></div></div>
+                        ${mem}%
+                    </td>
+                </tr>`;
+            }).join('');
         }
 
         setInterval(updateStats, 2000);
