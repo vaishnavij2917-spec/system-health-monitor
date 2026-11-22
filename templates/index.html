@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>System Health Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #38bdf8; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; max-width: 1000px; margin: 20px auto; }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card h3 { margin: 0 0 10px; font-size: 14px; color: #94a3b8; text-transform: uppercase; }
+        .value { font-size: 28px; font-weight: bold; color: #22c55e; }
+        .alert { color: #ef4444 !important; }
+        .chart-box { max-width: 1000px; margin: 20px auto; background: #1e293b; padding: 20px; border-radius: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #334155; }
+    </style>
+</head>
+<body>
+    <h1>⚡ Live System Health Monitor</h1>
+
+    <div class="grid">
+        <div class="card">
+            <h3>CPU Usage</h3>
+            <div class="value" id="cpu">--%</div>
+        </div>
+        <div class="card">
+            <h3>RAM Usage</h3>
+            <div class="value" id="ram">--%</div>
+            <small id="ram-detail" style="color:#94a3b8;"></small>
+        </div>
+        <div class="card">
+            <h3>Disk (C:) Usage</h3>
+            <div class="value" id="disk">--%</div>
+        </div>
+        <div class="card">
+            <h3>Battery</h3>
+            <div class="value" id="battery">--%</div>
+        </div>
+    </div>
+
+    <div class="chart-box">
+        <canvas id="liveChart" height="90"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h3>Top 5 Memory Consuming Processes</h3>
+        <table>
+            <thead><tr><th>PID</th><th>App Name</th><th>RAM %</th></tr></thead>
+            <tbody id="process-table"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('liveChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'CPU %', data: [], borderColor: '#38bdf8', tension: 0.3 },
+                    { label: 'RAM %', data: [], borderColor: '#a855f7', tension: 0.3 }
+                ]
+            },
+            options: { scales: { y: { min: 0, max: 100 } } }
+        });
+
+        async function updateStats() {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+
+            const cpuEl = document.getElementById('cpu');
+            cpuEl.textContent = data.cpu + '%';
+            cpuEl.className = data.cpu > 80 ? 'value alert' : 'value';
+
+            const ramEl = document.getElementById('ram');
+            ramEl.textContent = data.ram_percent + '%';
+            ramEl.className = data.ram_percent > 80 ? 'value alert' : 'value';
+            document.getElementById('ram-detail').textContent = `${data.ram_used} GB / ${data.ram_total} GB`;
+
+            document.getElementById('disk').textContent = data.disk_percent + '%';
+            document.getElementById('battery').textContent = data.battery !== "N/A" 
+                ? `${data.battery}% ${data.plugged ? '⚡' : ''}` : 'Desktop';
+
+            // Update Chart
+            const now = new Date().toLocaleTimeString();
+            if (chart.data.labels.length > 15) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+            }
+            chart.data.labels.push(now);
+            chart.data.datasets[0].data.push(data.cpu);
+            chart.data.datasets[1].data.push(data.ram_percent);
+            chart.update();
+
+            // Update Processes
+            const tbody = document.getElementById('process-table');
+            tbody.innerHTML = data.top_processes.map(p => 
+                `<tr><td>${p.pid}</td><td>${p.name}</td><td>${p.memory_percent.toFixed(1)}%</td></tr>`
+            ).join('');
+        }
+
+        setInterval(updateStats, 2000);
+        updateStats();
+    </script>
+</body>
+</html>
